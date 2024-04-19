@@ -105,7 +105,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         Refused;
     };
 
-    private final String host;
+    private final InetAddress host;
     private final int serverPort;
     private final QuicSessionTicket sessionTicket;
     private final TlsClientEngine tlsEngine;
@@ -140,13 +140,13 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private volatile ClientHello originalClientHello;
 
 
-    private QuicClientConnectionImpl(String host, int port, String applicationProtocol, long connectTimeout,
+    private QuicClientConnectionImpl(InetAddress host, int port, String applicationProtocol, long connectTimeout,
                                      ClientConnectionConfig connectionProperties, QuicSessionTicket sessionTicket,
                                      Version originalVersion, Version preferredVersion, Logger log,
-                                     String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength,
+                                     InetAddress proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength,
                                      List<TlsConstants.CipherSuite> cipherSuites,
                                      X509Certificate clientCertificate, PrivateKey clientCertificateKey,
-                                     DatagramSocketFactory socketFactory) throws UnknownHostException, SocketException {
+                                     DatagramSocketFactory socketFactory) throws SocketException {
         super(originalVersion, Role.Client, secretsFile, log);
         this.applicationProtocol = applicationProtocol;
         this.connectTimeout = connectTimeout;
@@ -156,7 +156,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         this.preferredVersion = preferredVersion;
         this.host = host;
         this.serverPort = port;
-        serverAddress = InetAddress.getByName(proxyHost != null? proxyHost: host);
+        serverAddress = proxyHost != null? proxyHost: host;
         this.sessionTicket = sessionTicket;
         this.cipherSuites = cipherSuites;
         this.clientCertificate = clientCertificate;
@@ -453,7 +453,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     private void startHandshake(String applicationProtocol, boolean withEarlyData) {
-        tlsEngine.setServerName(host);
+        tlsEngine.setServerName(host.getHostName());
         tlsEngine.addSupportedCiphers(cipherSuites);
         if (clientCertificate != null && clientCertificateKey != null) {
             tlsEngine.setClientCertificateCallback(authorities -> {
@@ -1217,6 +1217,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         private DatagramSocketFactory socketFactory;
         private long connectTimeoutInMillis = DEFAULT_CONNECT_TIMEOUT_IN_MILLIS;
         private String applicationProtocol = "";
+        private AddressResolver addressResolver = InetAddress::getByName;
 
         private BuilderImpl() {
             connectionProperties.setMaxIdleTimeout(DEFAULT_MAX_IDLE_TIMEOUT);
@@ -1247,9 +1248,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 cipherSuites.add(TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256);
             }
 
+            InetAddress hostAddress = addressResolver.resolve(host);
+            InetAddress proxyAddress = proxyHost != null ? addressResolver.resolve(proxyHost) : null;
             QuicClientConnectionImpl quicConnection =
-                    new QuicClientConnectionImpl(host, port, applicationProtocol, connectTimeoutInMillis, connectionProperties, sessionTicket, Version.of(quicVersion),
-                            Version.of(preferredVersion), log, proxyHost, secretsFile, initialRtt, connectionIdLength,
+                    new QuicClientConnectionImpl(hostAddress, port, applicationProtocol, connectTimeoutInMillis, connectionProperties, sessionTicket, Version.of(quicVersion),
+                            Version.of(preferredVersion), log, proxyAddress, secretsFile, initialRtt, connectionIdLength,
                             cipherSuites, clientCertificate, clientCertificateKey, socketFactory);
 
             if (omitCertificateCheck) {
@@ -1407,6 +1410,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         @Override
         public Builder socketFactory(DatagramSocketFactory socketFactory) {
             this.socketFactory = socketFactory;
+            return this;
+        }
+
+        @Override
+        public Builder addressResolver(AddressResolver addressResolver) {
+            this.addressResolver = addressResolver;
             return this;
         }
     }

@@ -23,10 +23,7 @@ import net.luminis.quic.log.Logger;
 import net.luminis.tls.TlsConstants;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.SocketException;
-import java.net.URI;
-import java.net.UnknownHostException;
+import java.net.*;
 import java.nio.file.Path;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
@@ -133,6 +130,13 @@ public interface QuicClientConnection extends QuicConnection {
         Builder clientCertificateKey(PrivateKey privateKey);
 
         Builder socketFactory(DatagramSocketFactory socketFactory);
+
+        Builder addressResolver(AddressResolver addressResolver);
+
+        @FunctionalInterface
+        interface AddressResolver {
+            InetAddress resolve(String hostName) throws UnknownHostException;
+        }
     }
 
 }
